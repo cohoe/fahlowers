@@ -17,7 +17,6 @@ class fahlower {
 		$this->cb = \Codebird\Codebird::getInstance();
 		$this->cb->setConsumerKey($creds->consumerKey,$creds->consumerSecret);
 		$this->auth();
-		print_r($_SESSION);
 		$this->me = $this->getSelf();
 		if(isset($_GET['action'])) {
 			$this->action = $_GET['action'];
@@ -74,10 +73,8 @@ class fahlower {
 
 	function getFollowers() {
 		$time = $this->getCurrentTimestamp();
-		print "Current server time: ".$this->getFormattedTime($time)." (".$this->getCurrentTimestamp().")<br>";
 		// Do the first page of followers
 		$reply = $this->getFollowerList();
-		print_r($reply);
 		if(isset($reply->error)) {
 			$this->handleException($reply->error, $reply->httpstatus);
 		}
@@ -90,7 +87,6 @@ class fahlower {
 
 		// Run through all pages of data while there is a cursor
 		while($nextCursor > 0) {
-			print "LOOP ";
 			$reply = $this->getFollowerList($nextCursor);
 
 			foreach($reply->users as $user) {
@@ -99,19 +95,29 @@ class fahlower {
 
 			$nextCursor = $reply->next_cursor_str;
 		}
+
+		$this->printFollowers($time);
+	}
+
+	function printFollowers($time) {
+		print "Current server time: ".$this->getFormattedTime($time)." (".$this->getCurrentTimestamp().")<br>";
+		print "<ol>";
+		foreach($this->followers as $fObj) {
+			print "<li>".$fObj->name." (<a href='https://twitter.com/".$fObj->screen_name."'>".$fObj->screen_name."</a>)</li>";
+		}
+		print "</ol>";
 	}
 
 	function stashFollowerObj($fObj, $time) {
 		// This will eventually be some hippy database shit
 		$this->followers[] = $fObj;
-		print $fObj->name." - ".$fObj->screen_name."<br>";
 		$sql = "INSERT INTO scans VALUES (".$this->me->id.",".$time.",".$fObj->id.",'".$fObj->name."','".$fObj->screen_name."',".$time.")";
 		dbExecute($sql);
 	}
 
 
 	function getFollowerList($cursor=-1) {
-		$reply = $this->cb->followers_list("cursor=$cursor",true);
+		$reply = $this->cb->followers_list("cursor=$cursor");
 		if(isset($reply->errors)) {
 			$this->handleException($reply->errors[0]->message, $reply->httpstatus);
 		}
@@ -144,12 +150,11 @@ class fahlower {
 		print "<div class='header'>";
 		print "<h1>Fahlowers</h1>";
 		print "Twitter follower analysis... without the ads!<br>";
-		print "This application thinks that you are: ".$this->me->name." (".$this->me->screen_name.")<br>";
+		print "This application thinks that you are: ".$this->me->name." (<a href='https://twitter.com/".$this->me->screen_name."'>".$this->me->screen_name."</a>)<br>";
 		print "<ul class='nav'>";
-		print "<li><a href='fahlowers.php'>Home</a></li>";
-		print "<li><a href='?action=current'>Current Followers</a></li>";
-		print "<li><a href='?action=previous'>Previous Followers</a></li>";
-		print "<li><a href='?action=scans'>Follower Scan History</a></li>";
+		print "<li><a href='fahlowers.php'>Home</a> (and help)</li>";
+		print "<li><a href='?action=current'>Current Followers</a> (Only click once or twice per 15 minutes)</li>";
+		print "<li><a href='?action=scans'>Follower History</a></li>";
 		print "<li><a href='?action=changes'>Changes</a></li>";
 		print "</div>";
 		print "<div class='body'>";
@@ -189,7 +194,7 @@ class fahlower {
 	}
 
 	function printResults($results) {
-		print "Last Scan Timestamp: ".$this->getFormattedTime($results[0]['timestamp']);
+		print "Last Update Timestamp: ".$this->getFormattedTime($results[0]['timestamp']);
 		print "<ol>";
 		foreach($results as $row) {
 			print "<li>".$row['follower_name']." (<a href='http://twitter.com/".$row['follower_handle']."'>".$row['follower_handle']."</a>)</li>";
@@ -198,7 +203,7 @@ class fahlower {
 	}
 
 	function getScans() {
-		$sql = "SELECT DISTINCT timestamp FROM scans ORDER BY timestamp DESC";
+		$sql = "SELECT DISTINCT timestamp FROM scans WHERE user_id=".$this->me->id." ORDER BY timestamp DESC";
 		$results = getDbResults($sql);
 		return $results;
 	}
@@ -223,7 +228,7 @@ class fahlower {
 	}
 
 	function compareScans($recent=null) {
-		print "Follower Scans (most recent first). Click to compare results.<br>";
+		print "Follower Updates (most recent first). Click to compare results.<br>";
 		print "<ol>";
 		foreach($this->getScans() as $row) {
 			if(isset($recent)){
@@ -267,25 +272,27 @@ class fahlower {
 		$recent_data = $this->listFollowersFromScan($recent_data);
 		print "Comparing <a href='?action=scans&scan=$recent'>".$this->getFormattedTime($recent)."</a> (most recent) to <a href='?action=scans&scan=$diff'>".$this->getFormattedTime($diff)."</a> (other):<br>";
 		$compare_data = $this->listFollowersFromScan($compare_data);
+		print "<ol>";
 		foreach($recent_data as $recent_follower) {
 			if(isset($compare_data[$recent_follower['id']])) {
 				// We dont care
 				//print "Follower is not new (exists in both) - ".$recent_follower['id']."<br>";
 			} else {
-				print $recent_follower['name']." (<a href='https://twitter.com/".$recent_follower['sn']."'>".$recent_follower['sn']."</a>) has started following you<br>";
+				print "<li>".$recent_follower['name']." (<a href='https://twitter.com/".$recent_follower['sn']."'>".$recent_follower['sn']."</a>) has started following you</li>";
 			}
 		}
+		print "</ol>";
 
-		print "<p>";
-
+		print "<ol>";
 		foreach($compare_data as $old_follower) {
 			if(isset($recent_data[$old_follower['id']])) {
 				// We dont care
 				//print "Follower is not new (exists in both) - ".$old_follower['id']."<br>";
 			} else {
-				print $old_follower['name']." (<a href='https://twitter.com/".$old_follower['sn']."'>".$old_follower['sn']."</a>) has stopped following you<br>";
+				print "<li>".$old_follower['name']." (<a href='https://twitter.com/".$old_follower['sn']."'>".$old_follower['sn']."</a>) has stopped following you</li>";
 			}
 		}
+		print "</ol>";
 	}
 
 	function getRecent($diff) {
@@ -321,7 +328,7 @@ class fahlower {
 				}
 				break;
 			default:
-				print "Welcome to Fahlowers!";
+				print "<p>Welcome to Fahlowers! Here you can see statistics on who has been following you on Twitter. <h2>First Time</h2>If this is your first time on this app, you won't see very much other than your current followers (available via the Current Followers link above). Beware that the Twitter API limits the number of times you can use this per 15 minutes. Clicking on it will show you a list of your current followers and stash this list for the next time you come back. You can see all stashed lists in the Follower History are. <h2>Seeing Changes</h2>After a few days have gone by and you've saved a few lists (done by simply navigating to the Current Followers page) you can click Changes above and compare two different lists. You will be shown the difference between them (who has started and who has stopped following you).<h2>Privacy</h2>I cannot see anything in your account beyond it's public profile. I don't store anything more than a bunch of Twitter ID Numbers and timestamps. This project is 100% open source so you can see exactly what code is running (see Github link below).<h2>Why this exists</h2>I was tired of seeing advertisement tweets from fllwrs.com in my feed, so I wrote this to do the same thing without ads. Also because I wanted to write a Twitter app. And because I had nothing better to do. Got feature requests or feedback? Shoot me an email! (grant@grantcohoe.com)";
 		}
 		$this->printFooter();
 	}
