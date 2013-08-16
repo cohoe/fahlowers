@@ -16,9 +16,55 @@ class fahlower {
 		$creds = new Creds();
 		$this->cb = \Codebird\Codebird::getInstance();
 		$this->cb->setConsumerKey($creds->consumerKey,$creds->consumerSecret);
-		$this->cb->setToken($creds->token,$creds->secret);
+		$this->auth();
+		print_r($_SESSION);
 		$this->me = $this->getSelf();
-		$this->action = $_GET['action'];
+		if(isset($_GET['action'])) {
+			$this->action = $_GET['action'];
+		}
+	}
+
+	function auth() {
+		session_start();
+
+	   if (! isset($_SESSION['oauth_token'])) {
+		  // get the request token
+		  $reply = $this->cb->oauth_requestToken(array(
+			 'oauth_callback' => 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']
+		  ));
+
+		  // store the token
+		  $this->cb->setToken($reply->oauth_token, $reply->oauth_token_secret);
+		  $_SESSION['oauth_token'] = $reply->oauth_token;
+		  $_SESSION['oauth_token_secret'] = $reply->oauth_token_secret;
+		  $_SESSION['oauth_verify'] = true;
+
+		  // redirect to auth website
+		  $auth_url = $this->cb->oauth_authorize();
+		  header('Location: ' . $auth_url);
+		  die();
+
+	   } elseif (isset($_GET['oauth_verifier']) && isset($_SESSION['oauth_verify'])) {
+		  // verify the token
+		  $this->cb->setToken($_SESSION['oauth_token'], $_SESSION['oauth_token_secret']);
+		  unset($_SESSION['oauth_verify']);
+
+		  // get the access token
+		  $reply = $this->cb->oauth_accessToken(array(
+			 'oauth_verifier' => $_GET['oauth_verifier']
+		  ));
+
+		  // store the token (which is different from the request token!)
+		  $_SESSION['oauth_token'] = $reply->oauth_token;
+		  $_SESSION['oauth_token_secret'] = $reply->oauth_token_secret;
+
+		  // send to same URL, without oauth GET parameters
+		  header('Location: ' . basename(__FILE__));
+		  die();
+	   } else {
+		   $this->cb->setToken($_SESSION['oauth_token'], $_SESSION['oauth_token_secret']);
+	   }
+
 	}
 
 	function getSelf() {
@@ -31,6 +77,10 @@ class fahlower {
 		print "Current server time: ".$this->getFormattedTime($time)." (".$this->getCurrentTimestamp().")<br>";
 		// Do the first page of followers
 		$reply = $this->getFollowerList();
+		print_r($reply);
+		if(isset($reply->error)) {
+			$this->handleException($reply->error, $reply->httpstatus);
+		}
 		foreach($reply->users as $user) {
 			$this->stashFollowerObj($user, $time);
 		}
@@ -61,7 +111,7 @@ class fahlower {
 
 
 	function getFollowerList($cursor=-1) {
-		$reply = $this->cb->followers_list("cursor=$cursor");
+		$reply = $this->cb->followers_list("cursor=$cursor",true);
 		if(isset($reply->errors)) {
 			$this->handleException($reply->errors[0]->message, $reply->httpstatus);
 		}
@@ -93,7 +143,8 @@ class fahlower {
 		print "<body>";
 		print "<div class='header'>";
 		print "<h1>Fahlowers</h1>";
-		print "Twitter follower analysis... without the ads!";
+		print "Twitter follower analysis... without the ads!<br>";
+		print "This application thinks that you are: ".$this->me->name." (".$this->me->screen_name.")<br>";
 		print "<ul class='nav'>";
 		print "<li><a href='fahlowers.php'>Home</a></li>";
 		print "<li><a href='?action=current'>Current Followers</a></li>";
@@ -224,6 +275,8 @@ class fahlower {
 				print $recent_follower['name']." (<a href='https://twitter.com/".$recent_follower['sn']."'>".$recent_follower['sn']."</a>) has started following you<br>";
 			}
 		}
+
+		print "<p>";
 
 		foreach($compare_data as $old_follower) {
 			if(isset($recent_data[$old_follower['id']])) {
