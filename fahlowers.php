@@ -67,8 +67,8 @@ class fahlower {
 	}
 
 	function getSelf() {
-		$handle = $this->cb->account_settings()->screen_name;
-		return $this->cb->users_show("screen_name=$handle");
+		$reply = $this->cb->account_verifyCredentials();
+		return $reply;
 	}
 
 	function getFollowers() {
@@ -158,6 +158,9 @@ class fahlower {
 		print "<li><a href='?action=changes'>Changes</a></li>";
 		print "</div>";
 		print "<div class='body'>";
+		if(!$this->me->name) {
+			#$this->handleException("The app has forgotten who you are. Please close this window and open a new instance of the app.","NONE");
+		}
 	}
 
 	function printFooter() {
