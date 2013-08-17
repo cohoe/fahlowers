@@ -143,7 +143,7 @@ class fahlower {
 	function printHeader() {
 		print "<head>";
 		print "<style type=text/css>";
-		print ".body { margin-top: 1em; margin-bottom: 1em; }";
+		print ".body { margin-top: 1em; margin-bottom: 1em; width: 50%;}";
 		print "</style>";
 		print "</head>";
 		print "<body>";
@@ -205,6 +205,9 @@ class fahlower {
 	function getScans() {
 		$sql = "SELECT DISTINCT timestamp FROM scans WHERE user_id=".$this->me->id." ORDER BY timestamp DESC";
 		$results = getDbResults($sql);
+			if(!$results) {
+				print "Hey! It seems you don't have any data here. Click on Current Followers above every once in a while to collect some data points.";
+			}
 		return $results;
 	}
 
