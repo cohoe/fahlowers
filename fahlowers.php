@@ -111,7 +111,7 @@ class fahlower {
 	function stashFollowerObj($fObj, $time) {
 		// This will eventually be some hippy database shit
 		$this->followers[] = $fObj;
-		$sql = "INSERT INTO scans VALUES (".$this->me->id.",".$time.",".$fObj->id.",'".$fObj->name."','".$fObj->screen_name."',".$time.")";
+		$sql = "INSERT INTO scans VALUES (".$this->me->id.",".$time.",".$fObj->id.",'".sqlite_escape_string ($fObj->name)."','".sqlite_escape_string ($fObj->screen_name)."',".$time.")";
 		dbExecute($sql);
 	}
 
